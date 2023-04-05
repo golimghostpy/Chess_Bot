@@ -2,6 +2,7 @@ import vk_api
 from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
 from random import randint
 from Chess_Classes import *
+from PIL import Image
 
 TOKEN = 'vk1.a.qOQPyAdJ_Z5WwjzbNl_WFUq2P05QGpwj-537I7vwLTneH1Fz06BBEslq0_rbUGJFabRakR9V-pL7dzhhx6qCeHA-AP2wNndJTFHYQ7sKmPyiAB05KWIkfmH4G_Gl9luw3qqe8UvwB6tTTaojNW1EcIHjgP8uX5Z89ppE5Mv2cpaWrEmrWtD9b9GC1ulJ_viLiTwOfjTcBd4mqifQqazVZw'
 GROUP_ID = 219645807
@@ -32,6 +33,24 @@ def to_cords(loc):
         return row, col
     except Exception:
         return False
+
+
+def build_field_img(field, player):
+    img = Image.new('RGB', (680, 680))
+    if player:
+        for i in range(8):
+            for j in range(8):
+                figure = Image.open(f"data/figures/{repr(field[i][j])}{(i + j) % 2}.png")
+                img.paste(figure, (80 * (7 - j), 80 * (7 - i)))
+    else:
+        for i in range(8):
+            for j in range(8):
+                figure = Image.open(f"data/figures/{repr(field[i][j])}{(i + j) % 2}.png")
+                img.paste(figure, (80 * j, 80 * i))
+    img = img.transpose(Image.FLIP_LEFT_RIGHT)
+    img.paste(Image.open('data/num_col.png'), (0, 0))
+    img.paste(Image.open('data/let_row.png'), (40, 640))
+    img.save('data/field.png')
 
 
 NO_ENEMY, WAITING_FOR_ACCEPT, FIGHTING = 0, 1, 2
@@ -218,8 +237,18 @@ class Bot:
     def process_field(self, user, command):
         if len(command) == 2:
             if command[1] == 'show':
-                text = '\n'.join(['\t'.join(list(map(str, row))) for row in self.players[user].game_field.field][::-1])
-                self.send_message(user, text)
+                if self.players[user].condition == NO_ENEMY:
+                    build_field_img(self.players[user].edit_field.field, self.players[user].color)
+                else:
+                    build_field_img(self.players[user].game_field.field, self.players[user].color)
+                vk = self.session.get_api()
+                upload = vk_api.VkUpload(vk)
+                vk_image = upload.photo_messages('data/field.png')
+                owner_id = vk_image[0]['owner_id']
+                photo_id = vk_image[0]['id']
+                access_key = vk_image[0]['access_key']
+                attachment = f'photo{owner_id}_{photo_id}_{access_key}'
+                vk.messages.send(user_id=user, peer_id=user, random_id=0, attachment=attachment)
                 return
             if self.players[user].condition != NO_ENEMY:
                 self.send_message(user, 'too late for any field customisation')
@@ -246,10 +275,11 @@ class Bot:
                 else:
                     if command[2] == 'empty':
                         self.players[user].edit_field = ChessField()
-                        self.send_message(user, 'field created successfully\n"/save field" to save your field')
+                        self.send_message(user, 'field created successfully\n"/field save" to save your field')
                     elif command[2] == 'basic':
                         self.players[user].edit_field = ChessField()
                         self.players[user].edit_field.build()
+                        self.send_message(user, 'field created successfully\n"/field save" to save your field')
                     else:
                         self.send_message(user, 'wrong command arguments\ntype "/help field" for more information')
             elif command[1] == 'load':
