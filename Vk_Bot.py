@@ -3,6 +3,7 @@ from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
 from random import randint
 from Chess_Classes import *
 from PIL import Image
+import sqlite3
 
 TOKEN = 'vk1.a.qOQPyAdJ_Z5WwjzbNl_WFUq2P05QGpwj-537I7vwLTneH1Fz06BBEslq0_rbUGJFabRakR9V-pL7dzhhx6qCeHA-AP2wNndJTFHYQ7sKmPyiAB05KWIkfmH4G_Gl9luw3qqe8UvwB6tTTaojNW1EcIHjgP8uX5Z89ppE5Mv2cpaWrEmrWtD9b9GC1ulJ_viLiTwOfjTcBd4mqifQqazVZw'
 GROUP_ID = 219645807
@@ -51,6 +52,23 @@ def build_field_img(field, player):
     img.paste(Image.open('data/num_col.png'), (0, 0))
     img.paste(Image.open('data/let_row.png'), (40, 640))
     img.save('data/field.png')
+
+
+def field_to_str(field):
+    ans = ''
+    for i in range(8):
+        for j in range(8):
+            ans += repr(field[i][j]) + ';'
+    return ans[:-1]
+
+
+def str_to_field(game, string):
+    game.made_in_heaven()
+    figures = string.split(';')
+    for i in range(8):
+        for j in range(8):
+            if 'None' not in figures[i * 8 + j]:
+                figure_classes[figures[i * 8 + j][:-1]](i, j, int(figures[i * 8 + j][-1]), game).put()
 
 
 NO_ENEMY, WAITING_FOR_ACCEPT, FIGHTING = 0, 1, 2
@@ -267,7 +285,16 @@ class Bot:
                 self.send_message(user, 'too late for any field customisation')
                 return
             if command[1] == 'save':
-                pass
+                field_name = command[2]
+                field = field_to_str(self.players[user].edit_field.field)
+                try:
+                    con = sqlite3.connect('custom_fields.db')
+                    cur = con.cursor()
+                    cur.execute('INSERT INTO data(title, user, field) VALUES(?, ?, ?)', (field_name, user, field))
+                    con.commit()
+                    self.send_message(user, 'field saved successfully')
+                except Exception:
+                    self.send_message(user, 'this name has already used, please try another one')
             elif command[1] == 'create':
                 if self.players[user].edit_field:
                     self.send_message(user,
@@ -283,7 +310,14 @@ class Bot:
                     else:
                         self.send_message(user, 'wrong command arguments\ntype "/help field" for more information')
             elif command[1] == 'load':
-                pass
+                try:
+                    con = sqlite3.connect('custom_fields.db')
+                    cur = con.cursor()
+                    field = [x[0] for x in cur.execute("""SELECT field FROM data WHERE title = ?""", (command[2],))][0]
+                    str_to_field(self.players[user].edit_field, field)
+                    self.send_message(user, 'field loaded successfully')
+                except Exception:
+                    self.send_message(user, 'field with this name doesn\'t exist')
             else:
                 self.send_message(user, 'wrong command arguments\ntype "/help field" for more information')
         else:
@@ -375,7 +409,7 @@ class Bot:
             self.send_message(user, 'wrong command arguments\ntype "/help transform" for more information')
 
     def process_message(self, user, command, original):
-        message = original[original.find(command[1]) + len(command[1]) + 1:]
+        message = original[original.find(command[1]) + len(command[1]) + 1:].strip()
         if len(command) < 3:
             self.send_message(user, 'wrong command structure\ntype "/help message" for more information')
             return
