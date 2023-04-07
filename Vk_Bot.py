@@ -257,10 +257,13 @@ class Bot:
     def process_field(self, user, command):
         if len(command) == 2:
             if command[1] == 'show':
-                if self.players[user].condition == NO_ENEMY:
+                if self.players[user].condition == NO_ENEMY and self.players[user].edit_field:
                     build_field_img(self.players[user].edit_field.field, self.players[user].color)
-                else:
+                elif self.players[user].condition != NO_ENEMY:
                     build_field_img(self.players[user].game_field.field, self.players[user].color)
+                else:
+                    self.send_message(user, 'no field to show')
+                    return
                 vk = self.session.get_api()
                 upload = vk_api.VkUpload(vk)
                 vk_image = upload.photo_messages('data/field.png')
