@@ -49,8 +49,12 @@ def build_field_img(field, player):
                 figure = Image.open(f"data/figures/{repr(field[i][j])}{(i + j) % 2}.png")
                 img.paste(figure, (80 * j, 80 * i))
     img = img.transpose(Image.FLIP_LEFT_RIGHT)
-    img.paste(Image.open('data/num_col.png'), (0, 0))
-    img.paste(Image.open('data/let_row.png'), (40, 640))
+    if player:
+        img.paste(Image.open('data/num_for_white.png'), (0, 0))
+        img.paste(Image.open('data/let_for_white.png'), (40, 640))
+    else:
+        img.paste(Image.open('data/num_for_black.png'), (0, 0))
+        img.paste(Image.open('data/let_for_black.png'), (40, 640))
     img.save('data/field.png')
 
 
