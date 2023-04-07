@@ -204,10 +204,13 @@ class ChessField:  # класс шахматного поля
         for color in range(2):
             if not self.mat_check():
                 return True
+            if not self.check_check():
+                return True
             if self.transform_check(color):
                 return True
             self.change_step()
         return False
+
 
 class Figure:  # суперкласс фигуры
     def __init__(self, row, col, color, gamefield):  # level 0
