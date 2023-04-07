@@ -55,20 +55,22 @@ def build_field_img(field, player):
 
 
 def field_to_str(field):
-    ans = ''
+    ans = f'{field.step};'
     for i in range(8):
         for j in range(8):
-            ans += repr(field[i][j]) + ';'
+            ans += repr(field.field[i][j]) + ';'
     return ans[:-1]
 
 
-def str_to_field(game, string):
-    game.made_in_heaven()
+def str_to_field(string):
+    game = ChessField()
     figures = string.split(';')
+    game.step = int(figures.pop(0))
     for i in range(8):
         for j in range(8):
             if 'None' not in figures[i * 8 + j]:
                 figure_classes[figures[i * 8 + j][:-1]](i, j, int(figures[i * 8 + j][-1]), game).put()
+    return game
 
 
 NO_ENEMY, WAITING_FOR_ACCEPT, FIGHTING = 0, 1, 2
@@ -286,7 +288,7 @@ class Bot:
                 return
             if command[1] == 'save':
                 field_name = command[2]
-                field = field_to_str(self.players[user].edit_field.field)
+                field = field_to_str(self.players[user].edit_field)
                 try:
                     con = sqlite3.connect('custom_fields.db')
                     cur = con.cursor()
@@ -298,7 +300,7 @@ class Bot:
             elif command[1] == 'create':
                 if self.players[user].edit_field:
                     self.send_message(user,
-                                      'field already exists\ndelete previous field with "/field delete" first to create new one')
+                            'field already exists\ndelete previous field with "/field delete" first to create new one')
                 else:
                     if command[2] == 'empty':
                         self.players[user].edit_field = ChessField()
@@ -314,7 +316,7 @@ class Bot:
                     con = sqlite3.connect('custom_fields.db')
                     cur = con.cursor()
                     field = [x[0] for x in cur.execute("""SELECT field FROM data WHERE title = ?""", (command[2],))][0]
-                    str_to_field(self.players[user].edit_field, field)
+                    self.players[user].edit_field = str_to_field(field)
                     self.send_message(user, 'field loaded successfully')
                 except Exception:
                     self.send_message(user, 'field with this name doesn\'t exist')
