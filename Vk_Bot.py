@@ -467,6 +467,7 @@ class Bot:
         users_ids = [x[0] for x in cur.execute("""SELECT user_id FROM top""")]
         if user not in users_ids:
             cur.execute("""INSERT INTO top(user_id, rating) VALUES(?, ?)""", (user, 0))
+        con.commit()
         original = command
         command = command.split()
         if not command:
