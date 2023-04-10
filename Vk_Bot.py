@@ -88,6 +88,7 @@ class Player:
         self.enemy = None
         self.condition = NO_ENEMY
         self.waiting = set()
+        self.bet = False
 
 
 class Bot:
@@ -115,10 +116,23 @@ class Bot:
         if self.players[user].game_field.end:
             self.send_message(user, 'you\'ve won, game is finished')
             self.send_message(self.players[user].enemy, 'you\'ve lost, game is finished')
+            con = sqlite3.connect('data.db')
+            cur = con.cursor()
+            rating = [x[0] for x in cur.execute("""SELECT rating FROM top WHERE user_id = ?""", (user, ))][0] + 1
+            cur.execute("""UPDATE top SET rating = ? WHERE user_id = ?""", (rating, user))
+            self.send_message(user, f'your rating now is {rating}')
+            rating = [x[0] for x in cur.execute("""SELECT rating FROM top WHERE user_id = ?""", (self.players[user].enemy, ))][0]
+            if rating > 0:
+                    cur.execute("""UPDATE top SET rating = ? WHERE user_id = ?""",
+                                (rating - 1, self.players[user].enemy))
+                    self.send_message(self.players[user].enemy, f'your rating now is {rating - 1}')
+            con.commit()
             self.players[user].condition = NO_ENEMY
             self.players[self.players[user].enemy].condition = NO_ENEMY
             self.players[self.players[user].enemy].enemy = None
             self.players[user].enemy = None
+            self.players[self.players[user].enemy].bet = False
+            self.players[user].bet = False
             return True
         return False
 
@@ -240,6 +254,9 @@ class Bot:
             self.players[user].waiting.remove(int(command[2]))
             self.players[user].game_field = self.players[int(command[2])].game_field
             self.players[user].color = 1 - self.players[int(command[2])].color
+            if self.players[user].game_field.is_basic():
+                self.players[user].bet = True
+                self.players[int(command[2])].bet = True
             self.send_message(user, 'challenge accepted successfully')
             self.send_message(int(command[2]), 'you challenge has been accepted')
         elif command[1] == 'deny':
@@ -297,7 +314,7 @@ class Bot:
                 field_name = command[2]
                 field = field_to_str(self.players[user].edit_field)
                 try:
-                    con = sqlite3.connect('custom_fields.db')
+                    con = sqlite3.connect('data.db')
                     cur = con.cursor()
                     cur.execute('INSERT INTO data(title, user, field) VALUES(?, ?, ?)', (field_name, user, field))
                     con.commit()
@@ -320,7 +337,7 @@ class Bot:
                         self.send_message(user, 'wrong command arguments\ntype "/help field" for more information')
             elif command[1] == 'load':
                 try:
-                    con = sqlite3.connect('custom_fields.db')
+                    con = sqlite3.connect('data.db')
                     cur = con.cursor()
                     field = [x[0] for x in cur.execute("""SELECT field FROM data WHERE title = ?""", (command[2],))][0]
                     self.players[user].edit_field = str_to_field(field)
@@ -445,8 +462,16 @@ class Bot:
     def process_command(self, user, command):
         if user not in self.players:
             self.players[user] = Player()
+        con = sqlite3.connect('data.db')
+        cur = con.cursor()
+        users_ids = [x[0] for x in cur.execute("""SELECT user_id FROM top""")]
+        if user not in users_ids:
+            cur.execute("""INSERT INTO top(user_id, rating) VALUES(?, ?)""", (user, 0))
         original = command
         command = command.split()
+        if not command:
+            self.send_message(user, 'type "/commands" for command list')
+            return
         if command[0] == '/put':  # done
             self.process_put(user, command)
         elif command[0] == '/set':  # done

@@ -6,7 +6,6 @@
 '''
 
 
-
 class ChessField:  # класс шахматного поля
     def __init__(self):  # level 0
         self.end = False  # флаг, показывающий, поставлен ли мат
@@ -210,6 +209,20 @@ class ChessField:  # класс шахматного поля
                 return True
             self.change_step()
         return False
+
+    def is_basic(self):
+        newbie = ChessField()
+        newbie.build()
+        if newbie.step != self.step:
+            return False
+        for i in range(8):
+            for j in range(8):
+                if type(self.field[i][j]) != type(newbie.field[i][j]):
+                    return False
+                if self.field[i][j]:
+                    if self.field[i][j].color != newbie.field[i][j].color:
+                        return False
+        return True
 
 
 class Figure:  # суперкласс фигуры
