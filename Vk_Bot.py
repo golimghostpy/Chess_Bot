@@ -118,14 +118,13 @@ class Bot:
             self.send_message(self.players[user].enemy, 'you\'ve lost, game is finished')
             con = sqlite3.connect('data.db')
             cur = con.cursor()
-            rating = [x[0] for x in cur.execute("""SELECT rating FROM top WHERE user_id = ?""", (user, ))][0] + 1
-            cur.execute("""UPDATE top SET rating = ? WHERE user_id = ?""", (rating, user))
-            self.send_message(user, f'your rating now is {rating}')
+            rating = [x[0] for x in cur.execute("""SELECT rating FROM top WHERE user_id = ?""", (user, ))][0]
+            cur.execute("""UPDATE top SET rating = ? WHERE user_id = ?""", (rating + 1, user))
+            self.send_message(user, f'your rating now is {rating + 1}')
             rating = [x[0] for x in cur.execute("""SELECT rating FROM top WHERE user_id = ?""", (self.players[user].enemy, ))][0]
-            if rating > 0:
-                    cur.execute("""UPDATE top SET rating = ? WHERE user_id = ?""",
-                                (rating - 1, self.players[user].enemy))
-                    self.send_message(self.players[user].enemy, f'your rating now is {rating - 1}')
+            cur.execute("""UPDATE top SET rating = ? WHERE user_id = ?""",
+                        (rating - 1 if rating > 0 else 0, self.players[user].enemy))
+            self.send_message(self.players[user].enemy, f'your rating now is {rating - 1 if rating > 0 else 0}')
             con.commit()
             self.players[user].condition = NO_ENEMY
             self.players[self.players[user].enemy].condition = NO_ENEMY
@@ -162,6 +161,26 @@ class Bot:
             self.send_message(user, 'figure put successfully')
         except Exception:
             self.send_message(user, 'wrong command arguments\ntype "/help put" for more information')
+
+    def process_remove(self, user, command):
+        if len(command) != 2:
+            self.send_message(user, 'wrong command structure\ntype "/help remove" for more information')
+            return
+        if self.players[user].condition != NO_ENEMY:
+            self.send_message(user, 'too late for any customisation')
+            return
+        if self.players[user].edit_field is None:
+            self.send_message(user, 'create field with "/field create" first')
+            return
+        if to_cords(command[1]):
+            row, col = to_cords(command[1])
+            if not self.players[user].edit_field.field[row][col]:
+                self.send_message(user, 'nothing to remove')
+                return
+            self.players[user].edit_field.field[row][col].die()
+            self.send_message(user, 'figure removed successfully')
+        else:
+            self.send_message(user, 'wrong command arguments\ntype "/help remove" for more information')
 
     def process_set(self, user, command):
         if len(command) != 3:
@@ -223,7 +242,7 @@ class Bot:
                 self.players[user].condition = WAITING_FOR_ACCEPT
                 self.players[user].enemy = int(command[2])
                 self.players[int(command[2])].waiting.add(user)
-            except vk_api.exceptions.ApiError or AttributeError:
+            except Exception:
                 self.send_message(user,
                                   'this user hasn\'t started dialog with bot yet or does not exist at all\ntype "/help challenge" for more information')
         elif command[1] == 'cancel':
@@ -275,6 +294,15 @@ class Bot:
         else:
             self.send_message(user, 'wrong command arguments\ntype "/help challenge" for more information')
 
+    def process_surrender(self, user, command):
+        if len(command) != 1:
+            self.send_message(user, 'wrong command structure\ntype "/help surrender" for more information')
+            return
+        if self.players[user].condition != FIGHTING:
+            self.send_message(user, 'you\'re not fighting right now')
+            return
+        ###
+
     def process_field(self, user, command):
         if len(command) == 2:
             if command[1] == 'show':
@@ -302,6 +330,9 @@ class Bot:
                     self.players[user].edit_field = None
                     self.players[user].color = 1
                     self.send_message(user, 'field deleted successfully')
+                elif command[1] == 'clear':
+                    self.players[user].edit_field.made_in_heaven()
+                    self.send_message(user, 'field cleared successfully')
                 else:
                     self.send_message(user, 'no field to delete')
             else:
@@ -384,7 +415,7 @@ class Bot:
             if type(self.players[user].game_field.field[row][4]) != King:
                 self.send_message(user, 'castling can\'t be done')
                 return
-            if command[2] == 'left':
+            if command[2] == 'long':
                 for col in (4, 1, 0):
                     self.players[user].game_field.add_act(row, col)
                 if len(self.players[user].game_field.acts) != 3:
@@ -393,7 +424,8 @@ class Bot:
                     return
                 if self.players[user].game_field.add_act(row, 2):
                     self.send_message(user, 'castling done successfully')
-            elif command[2] == 'right':
+                    self.send_message(self.players[user].enemy, 'enemy move has been done')
+            elif command[2] == 'short':
                 for col in (4, 6, 7):
                     self.players[user].game_field.add_act(row, col)
                 if len(self.players[user].game_field.acts) != 3:
@@ -402,6 +434,7 @@ class Bot:
                     return
                 if self.players[user].game_field.add_act(row, 5):
                     self.send_message(user, 'castling done successfully')
+                    self.send_message(self.players[user].enemy, 'enemy move has been done')
             else:
                 self.send_message(user, 'wrong command arguments\ntype "/help move" for more information')
         else:
@@ -475,10 +508,14 @@ class Bot:
             return
         if command[0] == '/put':  # done
             self.process_put(user, command)
+        elif command[0] == '/remove':
+            self.process_remove(user, command)
         elif command[0] == '/set':  # done
             self.process_set(user, command)
         elif command[0] == '/challenge':  # done
             self.process_challenge(user, command)
+        elif command[0] == '/surrender':
+            self.process_surrender(user, command)
         elif command[0] == '/field':  # in process
             self.process_field(user, command)
         elif command[0] == '/move':  # done

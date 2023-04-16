@@ -66,6 +66,8 @@ class ChessField:  # класс шахматного поля
         self.step = 1 - self.step
 
     def put_figure(self, figure, row, col, color):
+        if self.field[row][col]:
+            self.field[row][col].die()
         figure(row, col, color, self).put()
         self.last_move.clear()
 
