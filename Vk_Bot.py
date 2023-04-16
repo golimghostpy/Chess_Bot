@@ -112,26 +112,49 @@ class Bot:
                 print(f'text: {event.object.message["text"]}')
                 print('--------------------------------------------')
 
+    def send_field(self, user, color, message, field=False):
+        if field:
+            send = field
+        else:
+            if self.players[user].condition == NO_ENEMY:
+                send = self.players[user].edit_field.field
+            else:
+                send = self.players[user].game_field.field
+        build_field_img(send, color)
+        vk = self.session.get_api()
+        upload = vk_api.VkUpload(vk)
+        vk_image = upload.photo_messages('data/field.png')
+        owner_id = vk_image[0]['owner_id']
+        photo_id = vk_image[0]['id']
+        access_key = vk_image[0]['access_key']
+        attachment = f'photo{owner_id}_{photo_id}_{access_key}'
+        vk.messages.send(user_id=user, peer_id=user, random_id=0, attachment=attachment, message=message)
+        for i in send:
+            print(i)
+
     def end_check(self, user):
         if self.players[user].game_field.end:
             self.send_message(user, 'you\'ve won, game is finished')
             self.send_message(self.players[user].enemy, 'you\'ve lost, game is finished')
-            con = sqlite3.connect('data.db')
-            cur = con.cursor()
-            rating = [x[0] for x in cur.execute("""SELECT rating FROM top WHERE user_id = ?""", (user, ))][0]
-            cur.execute("""UPDATE top SET rating = ? WHERE user_id = ?""", (rating + 1, user))
-            self.send_message(user, f'your rating now is {rating + 1}')
-            rating = [x[0] for x in cur.execute("""SELECT rating FROM top WHERE user_id = ?""", (self.players[user].enemy, ))][0]
-            cur.execute("""UPDATE top SET rating = ? WHERE user_id = ?""",
-                        (rating - 1 if rating > 0 else 0, self.players[user].enemy))
-            self.send_message(self.players[user].enemy, f'your rating now is {rating - 1 if rating > 0 else 0}')
-            con.commit()
+            if self.players[user].bet:
+                con = sqlite3.connect('data.db')
+                cur = con.cursor()
+                rating = [x[0] for x in cur.execute("""SELECT rating FROM top WHERE user_id = ?""", (user, ))][0]
+                cur.execute("""UPDATE top SET rating = ? WHERE user_id = ?""", (rating + 1, user))
+                self.send_message(user, f'your rating now is {rating + 1}')
+                rating = [x[0] for x in cur.execute("""SELECT rating FROM top WHERE user_id = ?""", (self.players[user].enemy, ))][0]
+                cur.execute("""UPDATE top SET rating = ? WHERE user_id = ?""",
+                            (rating - 1 if rating > 0 else 0, self.players[user].enemy))
+                self.send_message(self.players[user].enemy, f'your rating now is {rating - 1 if rating > 0 else 0}')
+                con.commit()
             self.players[user].condition = NO_ENEMY
             self.players[self.players[user].enemy].condition = NO_ENEMY
-            self.players[self.players[user].enemy].enemy = None
-            self.players[user].enemy = None
             self.players[self.players[user].enemy].bet = False
             self.players[user].bet = False
+            self.players[user].game_field = None
+            self.players[self.players[user].enemy].game_field = None
+            self.players[self.players[user].enemy].enemy = None
+            self.players[user].enemy = None
             return True
         return False
 
@@ -158,7 +181,7 @@ class Bot:
         try:
             color = colors[command[3].lower()]
             self.players[user].edit_field.put_figure(figure, row, col, color)
-            self.send_message(user, 'figure put successfully')
+            self.send_field(user, self.players[user].color, 'figure put successfully')
         except Exception:
             self.send_message(user, 'wrong command arguments\ntype "/help put" for more information')
 
@@ -178,7 +201,7 @@ class Bot:
                 self.send_message(user, 'nothing to remove')
                 return
             self.players[user].edit_field.field[row][col].die()
-            self.send_message(user, 'figure removed successfully')
+            self.send_field(user, self.players[user].color, 'figure removed successfully')
         else:
             self.send_message(user, 'wrong command arguments\ntype "/help remove" for more information')
 
@@ -236,13 +259,14 @@ class Bot:
             try:
                 if int(command[2]) not in self.players:
                     self.players[int(command[2])] = Player()
-                self.send_message(int(command[2]),
-                                  f'you have been challenged by {user}\ntype "/challenge accept {user}" to accept challenge\nelse type "/challenge deny {user}"')
+                self.send_field(int(command[2]), 1 - self.players[user].color,
+                                f'you have been challenged by {user}\ntype "/challenge accept {user}" to accept challenge\nelse type "/challenge deny {user}"',
+                                self.players[user].game_field.field)
                 self.send_message(user, 'waiting for player reply...')
                 self.players[user].condition = WAITING_FOR_ACCEPT
                 self.players[user].enemy = int(command[2])
                 self.players[int(command[2])].waiting.add(user)
-            except Exception:
+            except ValueError:
                 self.send_message(user,
                                   'this user hasn\'t started dialog with bot yet or does not exist at all\ntype "/help challenge" for more information')
         elif command[1] == 'cancel':
@@ -301,27 +325,30 @@ class Bot:
         if self.players[user].condition != FIGHTING:
             self.send_message(user, 'you\'re not fighting right now')
             return
-        ###
+        self.send_message(user, 'you\'ve surrendered')
+        self.send_message(self.players[user].enemy, 'your enemy have surrendered')
+        if self.players[user].bet:
+            con = sqlite3.connect('data.db')
+            cur = con.cursor()
+            rating = [x[0] for x in cur.execute("""SELECT rating FROM top WHERE user_id = ?""", (self.players[user].enemy,))][0]
+            cur.execute("""UPDATE top SET rating = ? WHERE user_id = ?""", (rating + 1, self.players[user].enemy))
+            self.send_message(self.players[user].enemy, f'your rating now is {rating + 1}')
+            rating = [x[0] for x in cur.execute("""SELECT rating FROM top WHERE user_id = ?""", (user,))][0]
+            cur.execute("""UPDATE top SET rating = ? WHERE user_id = ?""",
+                        (rating - 1 if rating > 0 else 0, user))
+            self.send_message(user, f'your rating now is {rating - 1 if rating > 0 else 0}')
+            con.commit()
+        self.players[user].condition = NO_ENEMY
+        self.players[self.players[user].enemy].condition = NO_ENEMY
+        self.players[self.players[user].enemy].bet = False
+        self.players[user].bet = False
+        self.players[user].game_field = None
+        self.players[self.players[user].enemy].game_field = None
+        self.players[self.players[user].enemy].enemy = None
+        self.players[user].enemy = None
 
     def process_field(self, user, command):
         if len(command) == 2:
-            if command[1] == 'show':
-                if self.players[user].condition == NO_ENEMY and self.players[user].edit_field:
-                    build_field_img(self.players[user].edit_field.field, self.players[user].color)
-                elif self.players[user].condition != NO_ENEMY:
-                    build_field_img(self.players[user].game_field.field, self.players[user].color)
-                else:
-                    self.send_message(user, 'no field to show')
-                    return
-                vk = self.session.get_api()
-                upload = vk_api.VkUpload(vk)
-                vk_image = upload.photo_messages('data/field.png')
-                owner_id = vk_image[0]['owner_id']
-                photo_id = vk_image[0]['id']
-                access_key = vk_image[0]['access_key']
-                attachment = f'photo{owner_id}_{photo_id}_{access_key}'
-                vk.messages.send(user_id=user, peer_id=user, random_id=0, attachment=attachment)
-                return
             if self.players[user].condition != NO_ENEMY:
                 self.send_message(user, 'too late for any field customisation')
                 return
@@ -359,11 +386,11 @@ class Bot:
                 else:
                     if command[2] == 'empty':
                         self.players[user].edit_field = ChessField()
-                        self.send_message(user, 'field created successfully\n"/field save" to save your field')
+                        self.send_field(user, self.players[user].color, 'field created successfully\n"/field save" to save your field')
                     elif command[2] == 'basic':
                         self.players[user].edit_field = ChessField()
                         self.players[user].edit_field.build()
-                        self.send_message(user, 'field created successfully\n"/field save" to save your field')
+                        self.send_field(user, self.players[user].color, 'field created successfully\n"/field save" to save your field')
                     else:
                         self.send_message(user, 'wrong command arguments\ntype "/help field" for more information')
             elif command[1] == 'load':
@@ -372,7 +399,7 @@ class Bot:
                     cur = con.cursor()
                     field = [x[0] for x in cur.execute("""SELECT field FROM data WHERE title = ?""", (command[2],))][0]
                     self.players[user].edit_field = str_to_field(field)
-                    self.send_message(user, 'field loaded successfully')
+                    self.send_field(user, self.players[user].color, 'field loaded successfully')
                 except Exception:
                     self.send_message(user, 'field with this name doesn\'t exist')
             else:
@@ -401,13 +428,13 @@ class Bot:
             if self.players[user].game_field.add_act(row1, col1):
                 if self.players[user].game_field.transform_check(self.players[user].color):
                     self.players[user].game_field.change_step()
-                    self.send_message(user,
+                    self.send_field(user, self.players[user].color,
                                       'choose what figure to transform your pawn into with "/transform {figure_class}"')
                     return
+                self.send_field(user, self.players[user].color, 'move done successfully')
+                self.send_field(self.players[user].enemy, 1 - self.players[user].color, 'enemy move has been done')
                 if self.end_check(user):
                     return
-                self.send_message(user, 'move done successfully')
-                self.send_message(self.players[user].enemy, 'enemy move has been done')
             else:
                 self.send_message(user, 'this move can\'t be done')
         elif command[1] == 'castling':
@@ -423,8 +450,10 @@ class Bot:
                     self.players[user].game_field.acts.clear()
                     return
                 if self.players[user].game_field.add_act(row, 2):
-                    self.send_message(user, 'castling done successfully')
-                    self.send_message(self.players[user].enemy, 'enemy move has been done')
+                    self.send_field(user, self.players[user].color, 'castling done successfully')
+                    self.send_field(self.players[user].enemy, 1 - self.players[user].color, 'enemy move has been done')
+                    if self.end_check(user):
+                        return
             elif command[2] == 'short':
                 for col in (4, 6, 7):
                     self.players[user].game_field.add_act(row, col)
@@ -433,8 +462,10 @@ class Bot:
                     self.players[user].game_field.acts.clear()
                     return
                 if self.players[user].game_field.add_act(row, 5):
-                    self.send_message(user, 'castling done successfully')
-                    self.send_message(self.players[user].enemy, 'enemy move has been done')
+                    self.send_field(user, self.players[user].color, 'castling done successfully')
+                    self.send_field(self.players[user].enemy, 1 - self.players[user].color, 'enemy move has been done')
+                    if self.end_check(user):
+                        return
             else:
                 self.send_message(user, 'wrong command arguments\ntype "/help move" for more information')
         else:
@@ -462,8 +493,10 @@ class Bot:
             self.players[user].game_field.field[row][col].transform(figure)
             self.players[user].game_field.last_move.clear()
             self.players[user].game_field.change_step()
-            self.send_message(user, 'figure changed successfully')
-            self.send_message(self.players[user].enemy, 'enemy move has been done')
+            self.send_field(user, self.players[user].color, 'figure changed successfully')
+            self.send_field(self.players[user].enemy, 1 - self.players[user].color, 'enemy move has been done')
+            if self.end_check(user):
+                return
         except Exception:
             self.send_message(user, 'wrong command arguments\ntype "/help transform" for more information')
 
