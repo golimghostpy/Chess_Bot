@@ -194,8 +194,7 @@ class ChessField:  # класс шахматного поля
         for color in (0, 1):  # переприсяга лл
             for figtype in self.figures[color].keys():
                 for fig in self.figures[color][figtype]:
-                    fig.gamefield = newbie
-                    fig.put()
+                    figtype(fig.row, fig.col, fig.color, newbie).put()
         newbie.last_move.clear()
         return newbie
 

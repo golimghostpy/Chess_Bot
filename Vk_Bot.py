@@ -129,8 +129,6 @@ class Bot:
         access_key = vk_image[0]['access_key']
         attachment = f'photo{owner_id}_{photo_id}_{access_key}'
         vk.messages.send(user_id=user, peer_id=user, random_id=0, attachment=attachment, message=message)
-        for i in send:
-            print(i)
 
     def end_check(self, user):
         if self.players[user].game_field.end:
