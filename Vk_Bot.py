@@ -243,6 +243,9 @@ class Bot:
             self.send_message(user, 'wrong command structure\ntype "/help challenge" for more information')
             return
         if command[1] == 'offer':
+            if str(user) == command[2]:
+                self.send_message(user, 'you can\'t challenge yourself')
+                return
             if self.players[user].condition != NO_ENEMY:
                 self.send_message(user, 'end your previous conflict first')
                 return
@@ -362,11 +365,11 @@ class Bot:
                     self.players[user].edit_field = None
                     self.players[user].color = 1
                     self.send_message(user, 'field deleted successfully')
-                elif command[1] == 'clear':
-                    self.players[user].edit_field.made_in_heaven()
-                    self.send_message(user, 'field cleared successfully')
                 else:
                     self.send_message(user, 'no field to delete')
+            elif command[1] == 'clear':
+                self.players[user].edit_field.made_in_heaven()
+                self.send_message(user, 'field cleared successfully')
             else:
                 self.send_message(user, 'wrong command arguments\ntype "/help field" for more information')
         elif len(command) == 3:
@@ -578,24 +581,150 @@ class Bot:
                 self.send_message(user, 'this user doesn\'t exists or never wrote to this bot')
 
     def process_help(self, user, command):
-        self.send_message(user, 'nothing here so far')
+        if len(command) != 2:
+            self.send_message(user, 'wrong command structure, use "/help {command}"')
+        elif command[1] == 'put':
+            self.send_message(user,
+'''"put" command is used to put figure on the field while it\'s edited
+
+formats:
+/put {figure type} {location} {color}
+
+figure type can be: Queen, King, Rook, Knight, Bishop, Pawn
+location must be written in format of {col}{row} like e2, g5, h1
+color can be one of: white, black
+
+examples:
+/put Rook c5 white''')
+        elif command[1] == 'remove':
+            self.send_message(user,
+'''"remove" command is used to remove figure from the field while it\'s edited
+
+formats:
+/remove {location}
+
+location must be written in format of {col}{row} like e2, g5, h1
+
+examples:
+/remove e2''')
+        elif command[1] == 'set':
+            self.send_message(user,
+'''"set" command is used to set some characteristics of field while it\'s edited
+
+formats:
+/set color {color}
+/set first {color}
+
+color in all cases can be one of: white, black, random
+"/set color {color}" sets color user currently editing field will play
+"/set first {color}" sets player of which color will make o move first
+
+examples:
+/set color white
+/set first random''')
+        elif command[1] == 'challenge':
+            self.send_message(user,
+'''"challenge" command is used for different actions about challenging other users
+
+formats:
+/challenge offer {id}
+/challenge cancel {id}
+/challenge accept {id}
+/challenge deny {id}
+
+id is just id of another user - it\'s 9-digit number usually
+use command "find" to get id of user
+"/challenge offer {id}" is used to challenge other player
+"/challenge cancel {id}" is used to cancel your challenge before is\'s accepted or denied
+"/challenge accept {id}" is used to accept challenge of some player to challenge you
+"/challenge deny {id}" is used to deny challenge of some player to challenge you
+
+examples:
+/challenge offer 505468618
+/challenge cancel 505468618
+/challenge accept 505468618
+/challenge deny 505468618''')
+        elif command[1] == 'surrender':
+            self.send_message(user,
+'''"surrender" command is used to surrender while fighting some other user
+
+formats:
+/surrender
+
+example:
+/surrender''')
+        elif command[1] == 'field':
+            self.send_message(user,
+'''"field" command is used to do various actions with field while it\'s customised
+
+formats:
+/field create {type}
+/field save {name}
+/field delete
+/field clear
+
+"/field create {type}" is used to create new field you\'ll challenge other users at later
+type can be: empty, basic
+"/field save {name}" is used to save field you\'re currently customising with some name you choose so it can be loaded by anyone
+"field load {name}" is used to load field from database using it\'s name
+"/field delete" is used to delete field you\'re currently customising
+"/field clear" is used to clear field  you\'re currently customising
+
+examples:
+/field create empty
+/field save fukk
+/field load fukk
+/field delete
+/field clear''')
+        elif command[1] == 'move':
+            self.send_message(user,
+'''"move" command is used to move figures while fighting
+
+formats:
+/move {start location} {finish location}
+
+locations must be written in format of {col}{row} like e2, g5, h1
+
+examples:
+/move e2 e4''')
+        elif command[1] == 'transform':
+            self.send_message(user,
+'''"transform" command is used to choose what figure to transform pawn into as it reaches end of the field
+
+formats:
+/transform {figure type}
+
+figure type can be: Queen, King, Rook, Knight, Bishop, Pawn
+
+examples:
+/transform Rook''')
+        elif command[1] == 'message':
+            self.send_message(user,
+'''"message" command is used to send messages to other players
+
+formats:
+/message {id} {text}
+
+id is just id of another user - it\'s 9-digit number usually
+use command "find" to get id of user
+text can be anything
+
+examples:
+/message 505468618 fuk u
+''')
+        elif command[1] == 'top':
+            self.send_message(user, '''''')
+        elif command[1] == 'find':
+            self.send_message(user, '''''')
+        else:
+            self.send_message(user, 'such command doesn\'t exist')
+
 
     def process_commands(self, user, command):
         if len(command) == 1:
             self.send_message(user, '''list of all commands:
-/field
-/put
-/remove
-/set
-/challenge
-/surrender
-/move
-/transform
-/message
-/top
-/fild
-/commands
-
+/field\n/put\n/remove\n/set\n/challenge
+/surrender\n/move\n/transform\n/message\n/top\n/find\n/commands\n\n
 use "/help {name of command}" for more info about command''')
         else:
             self.send_message(user, 'just type "/commands"')
@@ -638,7 +767,7 @@ use "/help {name of command}" for more info about command''')
             self.process_find(user, command)
         elif command[0] == '/help':  # last to be finished
             self.process_help(user, command)
-        elif command[0] == '/commands':  # last to be finished
+        elif command[0] == '/commands': # done
             self.process_commands(user, command)
         else:
             self.send_message(user, 'type "/commands" for command list')
