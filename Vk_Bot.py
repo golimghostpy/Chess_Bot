@@ -323,7 +323,14 @@ class Bot:
         if self.players[user].condition != FIGHTING:
             self.send_message(user, 'you\'re not fighting right now')
             return
-        self.send_message(user, 'you\'ve surrendered')
+        vk = self.session.get_api()
+        upload = vk_api.VkUpload(vk)
+        vk_image = upload.photo_messages('data/fool.png')
+        owner_id = vk_image[0]['owner_id']
+        photo_id = vk_image[0]['id']
+        access_key = vk_image[0]['access_key']
+        attachment = f'photo{owner_id}_{photo_id}_{access_key}'
+        vk.messages.send(user_id=user, peer_id=user, random_id=0, attachment=attachment, message="you\'ve surrendered")
         self.send_message(self.players[user].enemy, 'your enemy have surrendered')
         if self.players[user].bet:
             con = sqlite3.connect('data.db')
@@ -517,11 +524,81 @@ class Bot:
                 self.send_message(user,
                                   'this user hasn\'t started dialog with bot yet or does not exist at all\ntype "/help message" for more information')
 
+    def process_top(self, user, command):
+        con = sqlite3.connect('data.db')
+        cur = con.cursor()
+        rating = sorted([x for x in cur.execute("""SELECT * FROM top""")], key=lambda i: i[1], reverse=True)
+        if len(command) == 1:
+            n = 10
+        elif len(command) == 2:
+            try:
+                n = int(command[1])
+            except Exception:
+                if command[1] == 'all':
+                    n = len(rating)
+                else:
+                    self.send_message(user, 'wrong command structure\ntype "/help top" for more information')
+                    return
+        else:
+            self.send_message(user, 'wrong command structure\ntype "/help top" for more information')
+            return
+        top = []
+        for i in range(n):
+            try:
+                user_info = self.session.method('users.get', {'user_ids': rating[i][0]})
+                url = f"https://vk.com/id{user_info[0]['id']}"
+                fullname = f"{user_info[0]['first_name']} {user_info[0]['last_name']}"
+                top.append(f'{i + 1}. {fullname} {url} - {rating[i][1]}')
+            except Exception:
+                break
+        top.append('-' * 75)
+        user_rating = [(rating[i][1], i + 1) for i in range(len(rating)) if rating[i][0] == user][0]
+        top.append(f'You are now on {user_rating[1]} place, your rating: {user_rating[0]}')
+        self.send_message(user, '\n'.join(top))
+
+    def process_find(self, user, command):
+        if not len(command) == 3:
+            self.send_message(user, 'wrong command structure\ntype "/help find" for more information')
+            return
+        else:
+            name, surname = command[1:]
+            id = []
+            con = sqlite3.connect('data.db')
+            cur = con.cursor()
+            rating = sorted([x for x in cur.execute("""SELECT * FROM top""")], key=lambda i: i[1])
+            for i in range(len(rating)):
+                user_info = self.session.method('users.get', {'user_ids': rating[i][0]})
+                if name == user_info[0]['first_name'] and surname == user_info[0]['last_name']:
+                    id.append(f'{rating[i][0]} https://vk.com/id{rating[i][0]}')
+            if id:
+                for i in id:
+                    id, url = i.split()
+                    self.send_message(user, f'{name} {surname} id: {id}\nprofile: {url}')
+            else:
+                self.send_message(user, 'this user doesn\'t exists or never wrote to this bot')
+
     def process_help(self, user, command):
         self.send_message(user, 'nothing here so far')
 
     def process_commands(self, user, command):
-        self.send_message(user, 'nothing here so far')
+        if len(command) == 1:
+            self.send_message(user, '''list of all commands:
+/field
+/put
+/remove
+/set
+/challenge
+/surrender
+/move
+/transform
+/message
+/top
+/fild
+/commands
+
+use "/help {name of command}" for more info about command''')
+        else:
+            self.send_message(user, 'just type "/commands"')
 
     def process_command(self, user, command):
         if user not in self.players:
@@ -555,6 +632,10 @@ class Bot:
             self.process_transform(user, command)
         elif command[0] == '/message':  # done
             self.process_message(user, command, original)
+        elif command[0] == '/top':
+            self.process_top(user, command)
+        elif command[0] == '/find':
+            self.process_find(user, command)
         elif command[0] == '/help':  # last to be finished
             self.process_help(user, command)
         elif command[0] == '/commands':  # last to be finished
