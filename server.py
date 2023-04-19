@@ -4,24 +4,22 @@ from random import randint
 from Chess_Classes import *
 from PIL import Image
 import sqlite3
+import schedule
+from multiprocessing import Process
 
 TOKEN = 'vk1.a.qOQPyAdJ_Z5WwjzbNl_WFUq2P05QGpwj-537I7vwLTneH1Fz06BBEslq0_rbUGJFabRakR9V-pL7dzhhx6qCeHA-AP2wNndJTFHYQ7sKmPyiAB05KWIkfmH4G_Gl9luw3qqe8UvwB6tTTaojNW1EcIHjgP8uX5Z89ppE5Mv2cpaWrEmrWtD9b9GC1ulJ_viLiTwOfjTcBd4mqifQqazVZw'
 GROUP_ID = 219645807
 
-'''
-commands:
-done:
-/set (color, start) (white, black, random)
-/put {figure class} {location} (white, black)
-in process:
-/challenge (offer, cancel, accept, deny) {id}
-undone:
-/move {location_A} {location_B} OR specials: /move castling (right, left)
-/field (create, delete, show, save (enter name in that case))
-/message {id} {message}
-/commands
-/help {command}
-'''
+
+def ping():
+    session = vk_api.VkApi(token=TOKEN)
+    session.get_api().messages.send(user_id=485414809, message='ping', random_id=randint(0, 2 ** 64))
+
+
+def dude():
+    schedule.every(3).minutes.do(ping)
+    while 1:
+        schedule.run_pending()
 
 
 def to_cords(loc):
@@ -105,6 +103,7 @@ class Bot:
 
     def main_cycle(self):
         print('--------------------------------------------')
+        Process(target=dude).start()
         for event in self.long_poll.listen():
             if event.type == VkBotEventType.MESSAGE_NEW:
                 self.process_command(event.object.message["from_id"], event.object.message["text"])
