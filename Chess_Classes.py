@@ -62,16 +62,16 @@ class ChessField:  # класс шахматного поля
                 act[0].moves -= 2
         self.last_move.clear()
 
-    def change_step(self):
+    def change_step(self):  # смена цвета хода # level 0
         self.step = 1 - self.step
 
-    def put_figure(self, figure, row, col, color):
+    def put_figure(self, figure, row, col, color):  # постановка фигуры на матричное поле # level 1
         if self.field[row][col]:
             self.field[row][col].die()
         figure(row, col, color, self).put()
         self.last_move.clear()
 
-    def transform_check(self, color):
+    def transform_check(self, color):  # проверка на наличие трансформируемых пешек # level 0
         for pawn in self.figures[color][Pawn]:
             if pawn.row == 7 * color:
                 return pawn.row, pawn.col
@@ -188,7 +188,7 @@ class ChessField:  # класс шахматного поля
             return True
         return False
 
-    def copy(self):
+    def copy(self):  # функция копирования поля # level 2
         newbie = ChessField()
         newbie.step = self.step
         for color in (0, 1):  # переприсяга лл
@@ -198,7 +198,7 @@ class ChessField:  # класс шахматного поля
         newbie.last_move.clear()
         return newbie
 
-    def rigged(self):
+    def rigged(self):  # функция проверки поля на допустимость(например: есть ли 2 короля) # level 2
         if (len(self.figures[0][King]), len(self.figures[1][King])) != (1, 1):
             return True
         for color in range(2):
@@ -211,7 +211,7 @@ class ChessField:  # класс шахматного поля
             self.change_step()
         return False
 
-    def is_basic(self):
+    def is_basic(self):  # проверка на то, является ли поле базовым
         newbie = ChessField()
         newbie.build()
         if newbie.step != self.step:

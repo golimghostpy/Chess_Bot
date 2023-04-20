@@ -4,24 +4,12 @@ from random import randint
 from Chess_Classes import *
 from PIL import Image
 import sqlite3
-import schedule
-from multiprocessing import Process
 
 TOKEN = 'vk1.a.qOQPyAdJ_Z5WwjzbNl_WFUq2P05QGpwj-537I7vwLTneH1Fz06BBEslq0_rbUGJFabRakR9V-pL7dzhhx6qCeHA-AP2wNndJTFHYQ7sKmPyiAB05KWIkfmH4G_Gl9luw3qqe8UvwB6tTTaojNW1EcIHjgP8uX5Z89ppE5Mv2cpaWrEmrWtD9b9GC1ulJ_viLiTwOfjTcBd4mqifQqazVZw'
 GROUP_ID = 219645807
 
 
-def ping():
-    session = vk_api.VkApi(token=TOKEN)
-    session.get_api().messages.send(user_id=485414809, message='ping', random_id=randint(0, 2 ** 64))
-
-
-def dude():
-    schedule.every(3).minutes.do(ping)
-    while 1:
-        schedule.run_pending()
-
-
+# функция, которая преобразовывает координаты формата e2 в пару координат (1, 4)
 def to_cords(loc):
     try:
         if len(loc) != 2:
@@ -34,6 +22,7 @@ def to_cords(loc):
         return False
 
 
+# сборка цельного поля из множества маленьких картинок
 def build_field_img(field, player):
     img = Image.new('RGB', (680, 680))
     if player:
@@ -56,6 +45,7 @@ def build_field_img(field, player):
     img.save('data/field.png')
 
 
+# поле из элемента класса ChessField превращается в форматную строку для БД
 def field_to_str(field):
     ans = f'{field.step};'
     for i in range(8):
@@ -64,6 +54,7 @@ def field_to_str(field):
     return ans[:-1]
 
 
+# поле из БД превращается в элемент класса ChessField
 def str_to_field(string):
     game = ChessField()
     figures = string.split(';')
@@ -75,35 +66,40 @@ def str_to_field(string):
     return game
 
 
+# состояния игроков
 NO_ENEMY, WAITING_FOR_ACCEPT, FIGHTING = 0, 1, 2
 
 
+# класс игрока
 class Player:
     def __init__(self):
-        self.color = 1
-        self.edit_field = None
-        self.game_field = None
-        self.enemy = None
-        self.condition = NO_ENEMY
-        self.waiting = set()
-        self.bet = False
+        self.color = 1  # цвет игрока
+        self.edit_field = None  # редактируемое поле
+        self.game_field = None  # игровое поле
+        self.enemy = None  # текущий противник(id)
+        self.condition = NO_ENEMY  # состояние игрока
+        self.waiting = set()  # очередь запросов
+        self.bet = False  # будет ли сражение рейтинговым
 
 
+# класс бота
 class Bot:
     def __init__(self):
         self.session = vk_api.VkApi(token=TOKEN)
         self.long_poll = None
-        self.players = dict()
+        self.players = dict()  # словарь игроков
 
+    # отправка текстового сообщения пользователю, принимает id и сообщение
     def send_message(self, user, message):
         self.session.get_api().messages.send(user_id=user, message=message, random_id=randint(0, 2 ** 64))
 
+    # запуск бота
     def start(self):
         self.long_poll = VkBotLongPoll(self.session, GROUP_ID)
 
+    # постоянно ждет новых сообщений
     def main_cycle(self):
         print('--------------------------------------------')
-        Process(target=dude).start()
         for event in self.long_poll.listen():
             if event.type == VkBotEventType.MESSAGE_NEW:
                 self.process_command(event.object.message["from_id"], event.object.message["text"])
@@ -111,6 +107,7 @@ class Bot:
                 print(f'text: {event.object.message["text"]}')
                 print('--------------------------------------------')
 
+    # функция для отправки изображения поля
     def send_field(self, user, color, message, field=False):
         if field:
             send = field
@@ -129,10 +126,12 @@ class Bot:
         attachment = f'photo{owner_id}_{photo_id}_{access_key}'
         vk.messages.send(user_id=user, peer_id=user, random_id=0, attachment=attachment, message=message)
 
+    # функция окнчания игры
     def end_check(self, user):
         if self.players[user].game_field.end:
             self.send_message(user, 'you\'ve won, game is finished')
             self.send_message(self.players[user].enemy, 'you\'ve lost, game is finished')
+            # если игра рейтинговая, то рейтинг игроков в БД изменится
             if self.players[user].bet:
                 con = sqlite3.connect('data.db')
                 cur = con.cursor()
@@ -144,6 +143,7 @@ class Bot:
                             (rating - 1 if rating > 0 else 0, self.players[user].enemy))
                 self.send_message(self.players[user].enemy, f'your rating now is {rating - 1 if rating > 0 else 0}')
                 con.commit()
+            # менятеся состояние, исчезают противник, игровое поле и ставка
             self.players[user].condition = NO_ENEMY
             self.players[self.players[user].enemy].condition = NO_ENEMY
             self.players[self.players[user].enemy].bet = False
@@ -155,6 +155,7 @@ class Bot:
             return True
         return False
 
+    # функция постановки фигуры на редактируемое поле
     def process_put(self, user, command):
         if len(command) != 4:
             self.send_message(user, 'wrong command structure\ntype "/help put" for more information')
@@ -182,6 +183,7 @@ class Bot:
         except Exception:
             self.send_message(user, 'wrong command arguments\ntype "/help put" for more information')
 
+    # функция удаления фигуры с редактируемого поля
     def process_remove(self, user, command):
         if len(command) != 2:
             self.send_message(user, 'wrong command structure\ntype "/help remove" for more information')
@@ -202,6 +204,7 @@ class Bot:
         else:
             self.send_message(user, 'wrong command arguments\ntype "/help remove" for more information')
 
+    # установка цвета
     def process_set(self, user, command):
         if len(command) != 3:
             self.send_message(user, 'wrong command structure\ntype "/help set" for more information')
@@ -212,6 +215,7 @@ class Bot:
         if self.players[user].edit_field is None:
             self.send_message(user, 'create field with "/field create" first')
             return
+        # цвет, за который будет играть тот, кто отправляет запрос
         if command[1] == 'color':
             if command[2] == 'random':
                 self.players[user].color = randint(0, 1)
@@ -223,6 +227,7 @@ class Bot:
             except KeyError:
                 self.send_message(user, 'wrong command arguments\ntype "/help set" for more information')
                 return
+        #  цвет того, кто будет ходить первым
         elif command[1] == 'first':
             if command[2] == 'random':
                 self.players[user].edit_field.step = randint(0, 1)
@@ -237,10 +242,12 @@ class Bot:
         else:
             self.send_message(user, 'wrong command arguments\ntype "/help set" for more information')
 
+    # функция организации поединков между игроками
     def process_challenge(self, user, command):
         if len(command) != 3:
             self.send_message(user, 'wrong command structure\ntype "/help challenge" for more information')
             return
+        #  вызвать на поединок
         if command[1] == 'offer':
             if str(user) == command[2]:
                 self.send_message(user, 'you can\'t challenge yourself')
@@ -269,6 +276,7 @@ class Bot:
             except ValueError:
                 self.send_message(user,
                                   'this user hasn\'t started dialog with bot yet or does not exist at all\ntype "/help challenge" for more information')
+        # отменить свой вызов
         elif command[1] == 'cancel':
             if self.players[user].condition == NO_ENEMY:
                 self.send_message(user, 'no challenge offered to any user right now')
@@ -284,6 +292,7 @@ class Bot:
             self.players[user].enemy = None
             self.players[int(command[2])].waiting.remove(user)
             self.players[user].condition = NO_ENEMY
+        # принять вызов
         elif command[1] == 'accept':
             if self.players[user].condition == FIGHTING:
                 self.send_message(user, 'you can\'t accept challenge while having another fight')
@@ -302,6 +311,7 @@ class Bot:
                 self.players[int(command[2])].bet = True
             self.send_message(user, 'challenge accepted successfully')
             self.send_message(int(command[2]), 'you challenge has been accepted')
+        # отклонить вызов
         elif command[1] == 'deny':
             try:
                 if int(command[2]) not in self.players[user].waiting:
@@ -318,6 +328,7 @@ class Bot:
         else:
             self.send_message(user, 'wrong command arguments\ntype "/help challenge" for more information')
 
+    # сдаться
     def process_surrender(self, user, command):
         if len(command) != 1:
             self.send_message(user, 'wrong command structure\ntype "/help surrender" for more information')
@@ -354,11 +365,13 @@ class Bot:
         self.players[self.players[user].enemy].enemy = None
         self.players[user].enemy = None
 
+    # функция, котороя отвечает за действия производимые с полем
     def process_field(self, user, command):
         if len(command) == 2:
             if self.players[user].condition != NO_ENEMY:
                 self.send_message(user, 'too late for any field customisation')
                 return
+            # удалить редактируемое поле
             if command[1] == 'delete':
                 if self.players[user].edit_field:
                     self.players[user].edit_field = None
@@ -366,6 +379,7 @@ class Bot:
                     self.send_message(user, 'field deleted successfully')
                 else:
                     self.send_message(user, 'no field to delete')
+            # очитстить редактируемое поле
             elif command[1] == 'clear':
                 self.players[user].edit_field.made_in_heaven()
                 self.send_message(user, 'field cleared successfully')
@@ -375,6 +389,7 @@ class Bot:
             if self.players[user].condition != NO_ENEMY:
                 self.send_message(user, 'too late for any field customisation')
                 return
+            # сохранить кастомное поле в БД
             if command[1] == 'save':
                 field_name = command[2]
                 field = field_to_str(self.players[user].edit_field)
@@ -386,20 +401,24 @@ class Bot:
                     self.send_message(user, 'field saved successfully')
                 except Exception:
                     self.send_message(user, 'this name has already used, please try another one')
+            # создать новое поле для редактирования
             elif command[1] == 'create':
                 if self.players[user].edit_field:
                     self.send_message(user,
                             'field already exists\ndelete previous field with "/field delete" first to create new one')
                 else:
+                    # создать пустое поле
                     if command[2] == 'empty':
                         self.players[user].edit_field = ChessField()
                         self.send_field(user, self.players[user].color, 'field created successfully\n"/field save" to save your field')
+                    # создать базовое поле
                     elif command[2] == 'basic':
                         self.players[user].edit_field = ChessField()
                         self.players[user].edit_field.build()
                         self.send_field(user, self.players[user].color, 'field created successfully\n"/field save" to save your field')
                     else:
                         self.send_message(user, 'wrong command arguments\ntype "/help field" for more information')
+            # загрузить поле из БД
             elif command[1] == 'load':
                 try:
                     con = sqlite3.connect('data.db')
@@ -409,11 +428,14 @@ class Bot:
                     self.send_field(user, self.players[user].color, 'field loaded successfully')
                 except Exception:
                     self.send_message(user, 'field with this name doesn\'t exist')
+            # посмотреть список названий полей, сохраненных в БД
             elif command[1] == 'list':
                 con = sqlite3.connect('data.db')
                 cur = con.cursor()
+                #  посмотреть все названия
                 if command[2] == 'all':
                     fields_names = [x[0] for x in cur.execute("""SELECT title FROM data""")]
+                # посмотреть только свои поля
                 else:
                     fields_names = [x[0] for x in cur.execute("""SELECT title FROM data WHERE user=?""", (user, ))]
                 send = []
@@ -425,6 +447,7 @@ class Bot:
         else:
             self.send_message(user, 'wrong command structure\ntype "/help field" for more information')
 
+    # функция, связанная с движением фигур
     def process_move(self, user, command):
         if len(command) != 3:
             self.send_message(user, 'wrong command structure\ntype "/help move" for more information')
@@ -439,6 +462,7 @@ class Bot:
             self.send_message(user,
                               'choose what figure to transform your pawn into with "/transform {figure_class} first"')
             return
+        # передвижение с одной клетки на другую
         if to_cords(command[1]) and to_cords(command[2]):
             row0, col0 = to_cords(command[1])
             row1, col1 = to_cords(command[2])
@@ -455,11 +479,13 @@ class Bot:
                     return
             else:
                 self.send_message(user, 'this move can\'t be done')
+        # рокировка
         elif command[1] == 'castling':
             row = 7 * (1 - self.players[user].color)
             if type(self.players[user].game_field.field[row][4]) != King:
                 self.send_message(user, 'castling can\'t be done')
                 return
+            # длинная рокировка
             if command[2] == 'long':
                 for col in (4, 1, 0):
                     self.players[user].game_field.add_act(row, col)
@@ -472,6 +498,7 @@ class Bot:
                     self.send_field(self.players[user].enemy, 1 - self.players[user].color, 'enemy move has been done')
                     if self.end_check(user):
                         return
+            # короткая рокировка
             elif command[2] == 'short':
                 for col in (4, 6, 7):
                     self.players[user].game_field.add_act(row, col)
@@ -489,6 +516,7 @@ class Bot:
         else:
             self.send_message(user, 'wrong command arguments\ntype "/help move" for more information')
 
+    # функция превращения пешки по достижении конца поля
     def process_transform(self, user, command):
         if len(command) != 2:
             self.send_message(user, 'wrong command structure\ntype "/help transform" for more information')
@@ -518,6 +546,7 @@ class Bot:
         except Exception:
             self.send_message(user, 'wrong command arguments\ntype "/help transform" for more information')
 
+    # отправка сообщений между пользователями(мини-чат)
     def process_message(self, user, command, original):
         message = original[original.find(command[1]) + len(command[1]) + 1:].strip()
         if len(command) < 3:
@@ -537,12 +566,15 @@ class Bot:
                 self.send_message(user,
                                   'this user hasn\'t started dialog with bot yet or does not exist at all\ntype "/help message" for more information')
 
+    # функция, связанная с выводом рейтинга игроков
     def process_top(self, user, command):
         con = sqlite3.connect('data.db')
         cur = con.cursor()
         rating = sorted([x for x in cur.execute("""SELECT * FROM top""")], key=lambda i: i[1], reverse=True)
+        # если количесво мест не указано, то выведется топ 10
         if len(command) == 1:
             n = 10
+        # иначе выводится n первых мест
         elif len(command) == 2:
             try:
                 n = int(command[1])
@@ -569,6 +601,7 @@ class Bot:
         top.append(f'You are now on {user_rating[1]} place, your rating: {user_rating[0]}')
         self.send_message(user, '\n'.join(top))
 
+    # функция для нахождения id игрока по имени страницы
     def process_find(self, user, command):
         if not len(command) == 3:
             self.send_message(user, 'wrong command structure\ntype "/help find" for more information')
@@ -590,6 +623,7 @@ class Bot:
             else:
                 self.send_message(user, 'this user doesn\'t exists or never wrote to this bot')
 
+    # функция описания функций
     def process_help(self, user, command):
         if len(command) != 2:
             self.send_message(user, 'wrong command structure, use "/help {command}"')
@@ -697,8 +731,10 @@ examples:
 
 formats:
 /move {start location} {finish location}
+/move castling {type}
 
 locations must be written in format of {col}{row} like e2, g5, h1
+type can be one of: long, short
 
 examples:
 /move e2 e4''')
@@ -752,7 +788,7 @@ examles:
         else:
             self.send_message(user, 'such command doesn\'t exist')
 
-
+    # вывод списка команд
     def process_commands(self, user, command):
         if len(command) == 1:
             self.send_message(user, '''list of all commands:
@@ -776,31 +812,31 @@ use "/help {name of command}" for more info about command''')
         if not command:
             self.send_message(user, 'type "/commands" for command list')
             return
-        if command[0] == '/put':  # done
+        if command[0] == '/put':
             self.process_put(user, command)
         elif command[0] == '/remove':
             self.process_remove(user, command)
-        elif command[0] == '/set':  # done
+        elif command[0] == '/set':
             self.process_set(user, command)
-        elif command[0] == '/challenge':  # done
+        elif command[0] == '/challenge':
             self.process_challenge(user, command)
         elif command[0] == '/surrender':
             self.process_surrender(user, command)
-        elif command[0] == '/field':  # in process
+        elif command[0] == '/field':
             self.process_field(user, command)
-        elif command[0] == '/move':  # done
+        elif command[0] == '/move':
             self.process_move(user, command)
-        elif command[0] == '/transform':  # done
+        elif command[0] == '/transform':
             self.process_transform(user, command)
-        elif command[0] == '/message':  # done
+        elif command[0] == '/message':
             self.process_message(user, command, original)
         elif command[0] == '/top':
             self.process_top(user, command)
         elif command[0] == '/find':
             self.process_find(user, command)
-        elif command[0] == '/help':  # last to be finished
+        elif command[0] == '/help':
             self.process_help(user, command)
-        elif command[0] == '/commands': # done
+        elif command[0] == '/commands':
             self.process_commands(user, command)
         else:
             self.send_message(user, 'type "/commands" for command list')
