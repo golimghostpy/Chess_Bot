@@ -1,0 +1,12 @@
+"move" command is used to move figures while fighting
+
+formats:
+/move {start location} {finish location}
+/move castling {type}
+
+locations must be written in format of {col}{row} like e2, g5, h1
+type can be one of: long, short
+
+examples:
+/move e2 e4
+/move castling long

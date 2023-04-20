@@ -1,0 +1,11 @@
+"put" command is used to put figure on the field while it\'s edited
+
+formats:
+/put {figure type} {location} {color}
+
+figure type can be: Queen, King, Rook, Knight, Bishop, Pawn
+location must be written in format of {col}{row} like e2, g5, h1
+color can be one of: white, black
+
+examples:
+/put Rook c5 white

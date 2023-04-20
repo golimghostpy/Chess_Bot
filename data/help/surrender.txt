@@ -1,0 +1,7 @@
+"surrender" command is used to surrender while fighting some other user
+
+formats:
+/surrender
+
+example:
+/surrender

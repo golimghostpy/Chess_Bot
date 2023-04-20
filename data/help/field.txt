@@ -1,0 +1,26 @@
+"field" command is used to do various actions with field while it\'s customised
+
+formats:
+/field create {type}
+/field save {name}
+/field delete
+/field clear
+/field list {whose}
+
+"/field create {type}" is used to create new field you\'ll challenge other users at later
+type can be: empty, basic
+"/field save {name}" is used to save field you\'re currently customising with some name you choose so it can be loaded by anyone
+name can be only one word lenght
+"/field load {name}" is used to load field from database using it\'s name
+"/field delete" is used to delete field you\'re currently customising
+"/field clear" is used to clear field  you\'re currently customising
+"/field list {whose} is used to know a list of saved castomised fields"
+whose can be: my, all
+
+examples:
+/field create empty
+/field save fukk
+/field load fukk
+/field delete
+/field clear
+/field list my

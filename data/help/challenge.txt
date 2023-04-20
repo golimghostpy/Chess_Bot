@@ -1,0 +1,20 @@
+"challenge" command is used for different actions about challenging other users
+
+formats:
+/challenge offer {id}
+/challenge cancel {id}
+/challenge accept {id}
+/challenge deny {id}
+
+id is just id of another user - it\'s 9-digit number usually
+use command "find" to get id of user
+"/challenge offer {id}" is used to challenge other player
+"/challenge cancel {id}" is used to cancel your challenge before is\'s accepted or denied
+"/challenge accept {id}" is used to accept challenge of some player to challenge you
+"/challenge deny {id}" is used to deny challenge of some player to challenge you
+
+examples:
+/challenge offer 505468618
+/challenge cancel 505468618
+/challenge accept 505468618
+/challenge deny 505468618

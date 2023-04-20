@@ -66,6 +66,12 @@ def str_to_field(string):
     return game
 
 
+# преобразование текста из файлов описания команд в одну строку для отправки
+def txt_to_str(filename):
+    with open(filename) as f:
+        return ''.join(f.readlines())
+
+
 # состояния игроков
 NO_ENEMY, WAITING_FOR_ACCEPT, FIGHTING = 0, 1, 2
 
@@ -132,17 +138,24 @@ class Bot:
             self.send_message(user, 'you\'ve won, game is finished')
             self.send_message(self.players[user].enemy, 'you\'ve lost, game is finished')
             # если игра рейтинговая, то рейтинг игроков в БД изменится
+            con = sqlite3.connect('data.db')
+            cur = con.cursor()
+            los = \
+                [x[0] for x in
+                 cur.execute("""SELECT losses FROM top WHERE user_id = ?""", (self.players[user].enemy,))][0]
+            win = [x[0] for x in cur.execute("""SELECT wins FROM top WHERE user_id = ?""", (user,))][0]
+            cur.execute("""UPDATE top SET losses = ? WHERE user_id = ?""", (los + 1, self.players[user].enemy))
+            cur.execute("""UPDATE top SET wins = ? WHERE user_id = ?""", (win + 1, user))
             if self.players[user].bet:
-                con = sqlite3.connect('data.db')
-                cur = con.cursor()
-                rating = [x[0] for x in cur.execute("""SELECT rating FROM top WHERE user_id = ?""", (user, ))][0]
+                rating = [x[0] for x in cur.execute("""SELECT rating FROM top WHERE user_id = ?""", (user,))][0]
                 cur.execute("""UPDATE top SET rating = ? WHERE user_id = ?""", (rating + 1, user))
                 self.send_message(user, f'your rating now is {rating + 1}')
-                rating = [x[0] for x in cur.execute("""SELECT rating FROM top WHERE user_id = ?""", (self.players[user].enemy, ))][0]
+                rating = [x[0] for x in
+                          cur.execute("""SELECT rating FROM top WHERE user_id = ?""", (self.players[user].enemy,))][0]
                 cur.execute("""UPDATE top SET rating = ? WHERE user_id = ?""",
                             (rating - 1 if rating > 0 else 0, self.players[user].enemy))
                 self.send_message(self.players[user].enemy, f'your rating now is {rating - 1 if rating > 0 else 0}')
-                con.commit()
+            con.commit()
             # менятеся состояние, исчезают противник, игровое поле и ставка
             self.players[user].condition = NO_ENEMY
             self.players[self.players[user].enemy].condition = NO_ENEMY
@@ -345,17 +358,23 @@ class Bot:
         attachment = f'photo{owner_id}_{photo_id}_{access_key}'
         vk.messages.send(user_id=user, peer_id=user, random_id=0, attachment=attachment, message="you\'ve surrendered")
         self.send_message(self.players[user].enemy, 'your enemy have surrendered')
+        con = sqlite3.connect('data.db')
+        cur = con.cursor()
+        win = [x[0] for x in cur.execute("""SELECT wins FROM top WHERE user_id = ?""", (self.players[user].enemy,))][0]
+        los = [x[0] for x in cur.execute("""SELECT losses FROM top WHERE user_id = ?""", (user,))][0]
+        cur.execute("""UPDATE top SET wins = ? WHERE user_id = ?""", (win + 1, self.players[user].enemy))
+        cur.execute("""UPDATE top SET losses = ? WHERE user_id = ?""", (los + 1, user))
         if self.players[user].bet:
-            con = sqlite3.connect('data.db')
-            cur = con.cursor()
-            rating = [x[0] for x in cur.execute("""SELECT rating FROM top WHERE user_id = ?""", (self.players[user].enemy,))][0]
+            rating = \
+                [x[0] for x in
+                 cur.execute("""SELECT rating FROM top WHERE user_id = ?""", (self.players[user].enemy,))][0]
             cur.execute("""UPDATE top SET rating = ? WHERE user_id = ?""", (rating + 1, self.players[user].enemy))
             self.send_message(self.players[user].enemy, f'your rating now is {rating + 1}')
             rating = [x[0] for x in cur.execute("""SELECT rating FROM top WHERE user_id = ?""", (user,))][0]
             cur.execute("""UPDATE top SET rating = ? WHERE user_id = ?""",
                         (rating - 1 if rating > 0 else 0, user))
             self.send_message(user, f'your rating now is {rating - 1 if rating > 0 else 0}')
-            con.commit()
+        con.commit()
         self.players[user].condition = NO_ENEMY
         self.players[self.players[user].enemy].condition = NO_ENEMY
         self.players[self.players[user].enemy].bet = False
@@ -405,17 +424,19 @@ class Bot:
             elif command[1] == 'create':
                 if self.players[user].edit_field:
                     self.send_message(user,
-                            'field already exists\ndelete previous field with "/field delete" first to create new one')
+                                      'field already exists\ndelete previous field with "/field delete" first to create new one')
                 else:
                     # создать пустое поле
                     if command[2] == 'empty':
                         self.players[user].edit_field = ChessField()
-                        self.send_field(user, self.players[user].color, 'field created successfully\n"/field save" to save your field')
+                        self.send_field(user, self.players[user].color,
+                                        'field created successfully\n"/field save" to save your field')
                     # создать базовое поле
                     elif command[2] == 'basic':
                         self.players[user].edit_field = ChessField()
                         self.players[user].edit_field.build()
-                        self.send_field(user, self.players[user].color, 'field created successfully\n"/field save" to save your field')
+                        self.send_field(user, self.players[user].color,
+                                        'field created successfully\n"/field save" to save your field')
                     else:
                         self.send_message(user, 'wrong command arguments\ntype "/help field" for more information')
             # загрузить поле из БД
@@ -437,7 +458,7 @@ class Bot:
                     fields_names = [x[0] for x in cur.execute("""SELECT title FROM data""")]
                 # посмотреть только свои поля
                 else:
-                    fields_names = [x[0] for x in cur.execute("""SELECT title FROM data WHERE user=?""", (user, ))]
+                    fields_names = [x[0] for x in cur.execute("""SELECT title FROM data WHERE user=?""", (user,))]
                 send = []
                 for i in range(len(fields_names)):
                     send.append(f'{i + 1}. {fields_names[i]}')
@@ -471,7 +492,7 @@ class Bot:
                 if self.players[user].game_field.transform_check(self.players[user].color):
                     self.players[user].game_field.change_step()
                     self.send_field(user, self.players[user].color,
-                                      'choose what figure to transform your pawn into with "/transform {figure_class}"')
+                                    'choose what figure to transform your pawn into with "/transform {figure_class}"')
                     return
                 self.send_field(user, self.players[user].color, 'move done successfully')
                 self.send_field(self.players[user].enemy, 1 - self.players[user].color, 'enemy move has been done')
@@ -593,7 +614,7 @@ class Bot:
                 user_info = self.session.method('users.get', {'user_ids': rating[i][0]})
                 url = f"https://vk.com/id{user_info[0]['id']}"
                 fullname = f"{user_info[0]['first_name']} {user_info[0]['last_name']}"
-                top.append(f'{i + 1}. {fullname} {url} - {rating[i][1]}')
+                top.append(f'{i + 1}. {fullname} {url} - {rating[i][1]}. Wins: {rating[i][2]} Losses: {rating[i][3]}')
             except Exception:
                 break
         top.append('-' * 75)
@@ -627,174 +648,16 @@ class Bot:
     def process_help(self, user, command):
         if len(command) != 2:
             self.send_message(user, 'wrong command structure, use "/help {command}"')
-        elif command[1] == 'put':
-            self.send_message(user,
-'''"put" command is used to put figure on the field while it\'s edited
-
-formats:
-/put {figure type} {location} {color}
-
-figure type can be: Queen, King, Rook, Knight, Bishop, Pawn
-location must be written in format of {col}{row} like e2, g5, h1
-color can be one of: white, black
-
-examples:
-/put Rook c5 white''')
-        elif command[1] == 'remove':
-            self.send_message(user,
-'''"remove" command is used to remove figure from the field while it\'s edited
-
-formats:
-/remove {location}
-
-location must be written in format of {col}{row} like e2, g5, h1
-
-examples:
-/remove e2''')
-        elif command[1] == 'set':
-            self.send_message(user,
-'''"set" command is used to set some characteristics of field while it\'s edited
-
-formats:
-/set color {color}
-/set first {color}
-
-color in all cases can be one of: white, black, random
-"/set color {color}" sets color user currently editing field will play
-"/set first {color}" sets player of which color will make o move first
-
-examples:
-/set color white
-/set first random''')
-        elif command[1] == 'challenge':
-            self.send_message(user,
-'''"challenge" command is used for different actions about challenging other users
-
-formats:
-/challenge offer {id}
-/challenge cancel {id}
-/challenge accept {id}
-/challenge deny {id}
-
-id is just id of another user - it\'s 9-digit number usually
-use command "find" to get id of user
-"/challenge offer {id}" is used to challenge other player
-"/challenge cancel {id}" is used to cancel your challenge before is\'s accepted or denied
-"/challenge accept {id}" is used to accept challenge of some player to challenge you
-"/challenge deny {id}" is used to deny challenge of some player to challenge you
-
-examples:
-/challenge offer 505468618
-/challenge cancel 505468618
-/challenge accept 505468618
-/challenge deny 505468618''')
-        elif command[1] == 'surrender':
-            self.send_message(user,
-'''"surrender" command is used to surrender while fighting some other user
-
-formats:
-/surrender
-
-example:
-/surrender''')
-        elif command[1] == 'field':
-            self.send_message(user,
-'''"field" command is used to do various actions with field while it\'s customised
-
-formats:
-/field create {type}
-/field save {name}
-/field delete
-/field clear
-/field list {whose}
-
-"/field create {type}" is used to create new field you\'ll challenge other users at later
-type can be: empty, basic
-"/field save {name}" is used to save field you\'re currently customising with some name you choose so it can be loaded by anyone
-name can be only one word lenght
-"/field load {name}" is used to load field from database using it\'s name
-"/field delete" is used to delete field you\'re currently customising
-"/field clear" is used to clear field  you\'re currently customising
-"/field list {whose} is used to know a list of saved castomised fields"
-whose can be: my, all
-
-examples:
-/field create empty
-/field save fukk
-/field load fukk
-/field delete
-/field clear
-/field list my''')
-        elif command[1] == 'move':
-            self.send_message(user,
-'''"move" command is used to move figures while fighting
-
-formats:
-/move {start location} {finish location}
-/move castling {type}
-
-locations must be written in format of {col}{row} like e2, g5, h1
-type can be one of: long, short
-
-examples:
-/move e2 e4''')
-        elif command[1] == 'transform':
-            self.send_message(user,
-'''"transform" command is used to choose what figure to transform pawn into as it reaches end of the field
-
-formats:
-/transform {figure type}
-
-figure type can be: Queen, King, Rook, Knight, Bishop, Pawn
-
-examples:
-/transform Rook''')
-        elif command[1] == 'message':
-            self.send_message(user,
-'''"message" command is used to send messages to other players
-
-formats:
-/message {id} {text}
-
-id is just id of another user - it\'s 9-digit number usually
-use command "find" to get id of user
-text can be anything
-
-examples:
-/message 505468618 fuk u
-''')
-        elif command[1] == 'top':
-            self.send_message(user,
-'''"top" command is used to know the rating of players
-
-formats:
-/top
-/top n
-
-"/top" will show all rating
-"/top n" will show only first n places, n > 0
-
-examples:
-/top 3''')
-        elif command[1] == 'find':
-            self.send_message(user,
-'''"find" command is used to know user id, it's important that user has already written to the bot and you must write the same name as it in VK
-
-formats:
-/top {name} {surname}
-
-examles:
-/find Павел Дуров''')
+        commands = ['put', 'remove', 'challenge', 'surrender', 'field',
+                    'move', 'transform', 'message', 'top', 'find']
+        if command[1] in commands:
+            self.send_message(user, txt_to_str(f'data/help/{command[1]}.txt'))
         else:
             self.send_message(user, 'such command doesn\'t exist')
 
-    # вывод списка команд
     def process_commands(self, user, command):
         if len(command) == 1:
-            self.send_message(user, '''list of all commands:
-/field\n/put\n/remove\n/set\n/challenge
-/surrender\n/move\n/transform\n/message\n/top\n/find\n/commands\n\n
-use "/help {name of command}" for more info about command''')
+            self.send_message(user, txt_to_str('data/help/commands.txt'))
         else:
             self.send_message(user, 'just type "/commands"')
 
@@ -805,7 +668,7 @@ use "/help {name of command}" for more info about command''')
         cur = con.cursor()
         users_ids = [x[0] for x in cur.execute("""SELECT user_id FROM top""")]
         if user not in users_ids:
-            cur.execute("""INSERT INTO top(user_id, rating) VALUES(?, ?)""", (user, 0))
+            cur.execute("""INSERT INTO top(user_id, rating, wins, looses) VALUES(?, ?, ?, ?)""", (user, 0, 0, 0))
         con.commit()
         original = command
         command = command.split()

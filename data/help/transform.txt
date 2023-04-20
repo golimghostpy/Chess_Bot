@@ -1,0 +1,9 @@
+"transform" command is used to choose what figure to transform pawn into as it reaches end of the field
+
+formats:
+/transform {figure type}
+
+figure type can be: Queen, King, Rook, Knight, Bishop, Pawn
+
+examples:
+/transform Rook

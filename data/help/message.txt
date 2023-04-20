@@ -1,0 +1,11 @@
+"message" command is used to send messages to other players
+
+formats:
+/message {id} {text}
+
+id is just id of another user - it\'s 9-digit number usually
+use command "find" to get id of user
+text can be anything
+
+examples:
+/message 505468618 fuk u

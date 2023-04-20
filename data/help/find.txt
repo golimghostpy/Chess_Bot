@@ -1,0 +1,7 @@
+"find" command is used to know user id, it's important that user has already written to the bot and you must write the same name as it in VK
+
+formats:
+/top {name} {surname}
+
+examles:
+/find Павел Дуров

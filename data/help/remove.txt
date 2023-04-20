@@ -1,0 +1,24 @@
+"remove" command is used to remove figure from the field while it\'s edited
+
+formats:
+/remove {location}
+
+location must be written in format of {col}{row} like e2, g5, h1
+
+examples:
+/remove e2''')
+        elif command[1] == 'set':
+            self.send_message(user,
+'''"set" command is used to set some characteristics of field while it\'s edited
+
+formats:
+/set color {color}
+/set first {color}
+
+color in all cases can be one of: white, black, random
+"/set color {color}" sets color user currently editing field will play
+"/set first {color}" sets player of which color will make o move first
+
+examples:
+/set color white
+/set first random

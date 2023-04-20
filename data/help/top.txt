@@ -1,0 +1,11 @@
+"top" command is used to know the rating of players
+
+formats:
+/top
+/top n
+
+"/top" will show all rating
+"/top n" will show only first n places, n > 0
+
+examples:
+/top 3

@@ -1,0 +1,17 @@
+list of all commands:
+
+/field
+/put
+/remove
+/set
+/challenge
+/surrender
+/move
+/transform
+/message
+/top
+/find
+/commands
+
+
+use "/help {name of command}" for more info about command
